@@ -1,7 +1,5 @@
-import { MessageCircle } from "lucide-react";
-
 export function WhatsAppFloatButton() {
-  const phone = "573001112223";
+  const phone = "573229310990";
   const text = encodeURIComponent(
     "Hola, vi tu portafolio LogicBiz Dev y quiero pedir información para un proyecto."
   );
@@ -12,11 +10,15 @@ export function WhatsAppFloatButton() {
       href={href}
       target="_blank"
       rel="noopener noreferrer"
-      className="fixed right-6 bottom-6 z-30 inline-flex h-14 w-14 items-center justify-center rounded-full bg-green-500 text-white shadow-xl shadow-green-900/30 transition hover:scale-105 hover:bg-green-400"
+      className="fixed right-6 bottom-6 z-30 inline-flex h-14 w-14 items-center justify-center rounded-full bg-green-600 p-2 text-white shadow-xl shadow-green-900/30 transition hover:scale-105 hover:bg-green-500"
       aria-label="Contactar por WhatsApp"
       title="Contactar por WhatsApp"
     >
-      <MessageCircle size={22} />
+      <img
+        src="/icons/whatsapp-official.svg"
+        alt="WhatsApp"
+        className="h-10 w-10"
+      />
     </a>
   );
 }
