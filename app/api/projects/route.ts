@@ -12,8 +12,11 @@ const upstashUrl = process.env.UPSTASH_REDIS_REST_URL ?? process.env.KV_REST_API
 const upstashToken =
   process.env.UPSTASH_REDIS_REST_TOKEN ?? process.env.KV_REST_API_TOKEN;
 const upstashKey = process.env.UPSTASH_PROJECTS_KEY ?? "logicbiz:projects";
+const storagePreference = (process.env.PROJECTS_STORAGE ?? "auto").toLowerCase();
+const useUpstash =
+  storagePreference !== "local" && Boolean(upstashUrl && upstashToken);
 const allowFallbackWhenUpstashConfigured = process.env.PROJECTS_ALLOW_FALLBACK === "1";
-const strictUpstash = Boolean(upstashUrl && upstashToken) && !allowFallbackWhenUpstashConfigured;
+const strictUpstash = useUpstash && !allowFallbackWhenUpstashConfigured;
 
 const isServerlessLike = Boolean(process.env.VERCEL);
 const defaultStoragePath = isServerlessLike
@@ -38,7 +41,7 @@ function isReadOnlyFsError(error: unknown) {
 }
 
 async function upstashCommand(command: unknown[]) {
-  if (!upstashUrl || !upstashToken) return null;
+  if (!useUpstash || !upstashUrl || !upstashToken) return null;
 
   let response: Response;
   try {
@@ -68,7 +71,7 @@ async function upstashCommand(command: unknown[]) {
 }
 
 function safeUpstashDiagnostics() {
-  if (!upstashUrl || !upstashToken) return null;
+  if (!useUpstash || !upstashUrl || !upstashToken) return null;
   try {
     const host = new URL(upstashUrl).host;
     return { host, key: upstashKey };
@@ -97,7 +100,7 @@ function coerceProjects(data: unknown): ProjectItem[] | null {
 }
 
 async function loadProjects(): Promise<ProjectItem[]> {
-  if (upstashUrl && upstashToken) {
+  if (useUpstash && upstashUrl && upstashToken) {
     try {
       const storedRaw = await upstashCommand(["GET", upstashKey]);
 
@@ -170,7 +173,7 @@ async function loadProjects(): Promise<ProjectItem[]> {
 
 async function saveProjects(nextProjects: ProjectItem[]) {
   volatileProjects = nextProjects;
-  if (upstashUrl && upstashToken) {
+  if (useUpstash && upstashUrl && upstashToken) {
     try {
       await upstashCommand([
         "SET",
@@ -262,22 +265,23 @@ export async function GET() {
   try {
     projects = await loadProjects();
   } catch (error) {
-    console.error("Projects Upstash/KV GET failed", {
+    console.error("Projects storage GET failed", {
       error: (error as Error | undefined)?.message ?? String(error),
       diag: safeUpstashDiagnostics(),
     });
     return NextResponse.json(
       {
-        error:
-          "No se pudo leer proyectos desde Upstash. Revisa env vars (UPSTASH_REDIS_REST_URL/TOKEN o KV_REST_API_URL/TOKEN) y el estado del servicio.",
+        error: useUpstash
+          ? "No se pudo leer proyectos desde Upstash. Revisa env vars (UPSTASH_REDIS_REST_URL/TOKEN o KV_REST_API_URL/TOKEN) y el estado del servicio."
+          : "No se pudieron cargar proyectos desde almacenamiento local.",
         details: (error as Error | undefined)?.message ?? String(error),
-        meta: { storage: "upstash" satisfies StorageMode },
+        meta: { storage: (useUpstash ? "upstash" : lastStorageMode) satisfies StorageMode },
       },
       {
-        status: 502,
+        status: useUpstash ? 502 : 500,
         headers: {
           ...noStoreHeaders,
-          "X-Projects-Storage": "upstash",
+          "X-Projects-Storage": useUpstash ? "upstash" : lastStorageMode,
         },
       }
     );
@@ -298,22 +302,23 @@ export async function POST(request: Request) {
   try {
     projects = await loadProjects();
   } catch (error) {
-    console.error("Projects Upstash/KV POST load failed", {
+    console.error("Projects storage POST load failed", {
       error: (error as Error | undefined)?.message ?? String(error),
       diag: safeUpstashDiagnostics(),
     });
     return NextResponse.json(
       {
-        error:
-          "No se pudo conectar a Upstash para crear el proyecto. Intenta de nuevo en unos segundos.",
+        error: useUpstash
+          ? "No se pudo conectar a Upstash para crear el proyecto. Intenta de nuevo en unos segundos."
+          : "No se pudo cargar el almacenamiento local para crear el proyecto.",
         details: (error as Error | undefined)?.message ?? String(error),
-        meta: { storage: "upstash" satisfies StorageMode },
+        meta: { storage: (useUpstash ? "upstash" : lastStorageMode) satisfies StorageMode },
       },
       {
-        status: 502,
+        status: useUpstash ? 502 : 500,
         headers: {
           ...noStoreHeaders,
-          "X-Projects-Storage": "upstash",
+          "X-Projects-Storage": useUpstash ? "upstash" : lastStorageMode,
         },
       }
     );
@@ -337,22 +342,23 @@ export async function POST(request: Request) {
   try {
     await saveProjects(nextProjects);
   } catch (error) {
-    console.error("Projects Upstash/KV POST save failed", {
+    console.error("Projects storage POST save failed", {
       error: (error as Error | undefined)?.message ?? String(error),
       diag: safeUpstashDiagnostics(),
     });
     return NextResponse.json(
       {
-        error:
-          "No se pudo persistir el proyecto en Upstash. Intenta de nuevo en unos segundos.",
+        error: useUpstash
+          ? "No se pudo persistir el proyecto en Upstash. Intenta de nuevo en unos segundos."
+          : "No se pudo persistir el proyecto en almacenamiento local.",
         details: (error as Error | undefined)?.message ?? String(error),
-        meta: { storage: "upstash" satisfies StorageMode },
+        meta: { storage: (useUpstash ? "upstash" : lastStorageMode) satisfies StorageMode },
       },
       {
-        status: 502,
+        status: useUpstash ? 502 : 500,
         headers: {
           ...noStoreHeaders,
-          "X-Projects-Storage": "upstash",
+          "X-Projects-Storage": useUpstash ? "upstash" : lastStorageMode,
         },
       }
     );
@@ -374,22 +380,23 @@ export async function PUT(request: Request) {
   try {
     projects = await loadProjects();
   } catch (error) {
-    console.error("Projects Upstash/KV PUT load failed", {
+    console.error("Projects storage PUT load failed", {
       error: (error as Error | undefined)?.message ?? String(error),
       diag: safeUpstashDiagnostics(),
     });
     return NextResponse.json(
       {
-        error:
-          "No se pudo conectar a Upstash para actualizar el proyecto. Intenta de nuevo en unos segundos.",
+        error: useUpstash
+          ? "No se pudo conectar a Upstash para actualizar el proyecto. Intenta de nuevo en unos segundos."
+          : "No se pudo cargar el almacenamiento local para actualizar el proyecto.",
         details: (error as Error | undefined)?.message ?? String(error),
-        meta: { storage: "upstash" satisfies StorageMode },
+        meta: { storage: (useUpstash ? "upstash" : lastStorageMode) satisfies StorageMode },
       },
       {
-        status: 502,
+        status: useUpstash ? 502 : 500,
         headers: {
           ...noStoreHeaders,
-          "X-Projects-Storage": "upstash",
+          "X-Projects-Storage": useUpstash ? "upstash" : lastStorageMode,
         },
       }
     );
@@ -421,22 +428,23 @@ export async function PUT(request: Request) {
   try {
     await saveProjects(nextProjects);
   } catch (error) {
-    console.error("Projects Upstash/KV PUT save failed", {
+    console.error("Projects storage PUT save failed", {
       error: (error as Error | undefined)?.message ?? String(error),
       diag: safeUpstashDiagnostics(),
     });
     return NextResponse.json(
       {
-        error:
-          "No se pudo persistir el proyecto en Upstash. Intenta de nuevo en unos segundos.",
+        error: useUpstash
+          ? "No se pudo persistir el proyecto en Upstash. Intenta de nuevo en unos segundos."
+          : "No se pudo persistir el proyecto en almacenamiento local.",
         details: (error as Error | undefined)?.message ?? String(error),
-        meta: { storage: "upstash" satisfies StorageMode },
+        meta: { storage: (useUpstash ? "upstash" : lastStorageMode) satisfies StorageMode },
       },
       {
-        status: 502,
+        status: useUpstash ? 502 : 500,
         headers: {
           ...noStoreHeaders,
-          "X-Projects-Storage": "upstash",
+          "X-Projects-Storage": useUpstash ? "upstash" : lastStorageMode,
         },
       }
     );
@@ -457,22 +465,23 @@ export async function DELETE(request: Request) {
   try {
     projects = await loadProjects();
   } catch (error) {
-    console.error("Projects Upstash/KV DELETE load failed", {
+    console.error("Projects storage DELETE load failed", {
       error: (error as Error | undefined)?.message ?? String(error),
       diag: safeUpstashDiagnostics(),
     });
     return NextResponse.json(
       {
-        error:
-          "No se pudo conectar a Upstash para eliminar el proyecto. Intenta de nuevo en unos segundos.",
+        error: useUpstash
+          ? "No se pudo conectar a Upstash para eliminar el proyecto. Intenta de nuevo en unos segundos."
+          : "No se pudo cargar el almacenamiento local para eliminar el proyecto.",
         details: (error as Error | undefined)?.message ?? String(error),
-        meta: { storage: "upstash" satisfies StorageMode },
+        meta: { storage: (useUpstash ? "upstash" : lastStorageMode) satisfies StorageMode },
       },
       {
-        status: 502,
+        status: useUpstash ? 502 : 500,
         headers: {
           ...noStoreHeaders,
-          "X-Projects-Storage": "upstash",
+          "X-Projects-Storage": useUpstash ? "upstash" : lastStorageMode,
         },
       }
     );
@@ -497,22 +506,23 @@ export async function DELETE(request: Request) {
   try {
     await saveProjects(nextProjects);
   } catch (error) {
-    console.error("Projects Upstash/KV DELETE save failed", {
+    console.error("Projects storage DELETE save failed", {
       error: (error as Error | undefined)?.message ?? String(error),
       diag: safeUpstashDiagnostics(),
     });
     return NextResponse.json(
       {
-        error:
-          "No se pudo persistir el borrado en Upstash. Intenta de nuevo en unos segundos.",
+        error: useUpstash
+          ? "No se pudo persistir el borrado en Upstash. Intenta de nuevo en unos segundos."
+          : "No se pudo persistir el borrado en almacenamiento local.",
         details: (error as Error | undefined)?.message ?? String(error),
-        meta: { storage: "upstash" satisfies StorageMode },
+        meta: { storage: (useUpstash ? "upstash" : lastStorageMode) satisfies StorageMode },
       },
       {
-        status: 502,
+        status: useUpstash ? 502 : 500,
         headers: {
           ...noStoreHeaders,
-          "X-Projects-Storage": "upstash",
+          "X-Projects-Storage": useUpstash ? "upstash" : lastStorageMode,
         },
       }
     );

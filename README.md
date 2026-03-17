@@ -35,6 +35,8 @@ La lista de proyectos se sirve desde `GET /api/projects` y el panel admin usa `P
 
 El API intenta persistir en este orden:
 
+0. (Opcional) Forzar almacenamiento: `PROJECTS_STORAGE=local` (archivo) o `PROJECTS_STORAGE=auto` (default).
+
 1. **Upstash Redis REST** (recomendado para producción): `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN` (+ `UPSTASH_PROJECTS_KEY` opcional).
    - Si usas **Vercel KV**, también funciona con `KV_REST_API_URL` + `KV_REST_API_TOKEN`.
 2. **Archivo JSON**: `PROJECTS_JSON_PATH` (opcional). Si no se define:

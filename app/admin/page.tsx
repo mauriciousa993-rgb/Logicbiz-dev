@@ -194,7 +194,7 @@ export default function AdminPage() {
         {storageMode === "memory" ? (
           <span className="ml-2 text-rose-200">
             (no persistente). Configura `UPSTASH_REDIS_REST_URL`/`UPSTASH_REDIS_REST_TOKEN` o define
-            `PROJECTS_JSON_PATH` a una ruta escribible.
+            `PROJECTS_JSON_PATH` a una ruta escribible (o fuerza local con `PROJECTS_STORAGE=local`).
           </span>
         ) : null}
       </p>
