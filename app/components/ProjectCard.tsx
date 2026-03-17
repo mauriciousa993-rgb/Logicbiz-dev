@@ -6,6 +6,10 @@ type ProjectCardProps = {
 };
 
 export function ProjectCard({ project }: ProjectCardProps) {
+  const whatsappNumber = "573229310990";
+  const whatsappMessage = `Hola, vi el proyecto \"${project.title}\" en tu portafolio y quiero pedir una cotización similar para mi negocio.`;
+  const whatsappHref = `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(whatsappMessage)}`;
+
   return (
     <article className="group overflow-hidden rounded-3xl border border-white/10 bg-slate-900/80 transition duration-300 hover:-translate-y-1 hover:border-indigo-300 hover:shadow-2xl hover:shadow-indigo-900/30">
       <div className="relative h-72 w-full overflow-hidden">
@@ -42,6 +46,14 @@ export function ProjectCard({ project }: ProjectCardProps) {
             className="rounded-full bg-indigo-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-400"
           >
             Demo
+          </a>
+          <a
+            href={whatsappHref}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="rounded-full border border-emerald-300/40 bg-emerald-500/20 px-4 py-2 text-sm font-semibold text-emerald-100 transition hover:border-emerald-200 hover:bg-emerald-400/30"
+          >
+            Quiero este sistema
           </a>
         </div>
       </div>
