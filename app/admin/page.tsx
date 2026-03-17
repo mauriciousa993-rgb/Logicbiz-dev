@@ -20,8 +20,10 @@ export default function AdminPage() {
   const [projects, setProjects] = useState<ProjectItem[]>([]);
   const [form, setForm] = useState<ProjectFormState>(emptyForm);
   const [stackInput, setStackInput] = useState("");
+  const [uploadingImage, setUploadingImage] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [imageMessage, setImageMessage] = useState("");
 
   const loadProjects = async () => {
     const res = await fetch("/api/projects", { cache: "no-store" });
@@ -38,6 +40,7 @@ export default function AdminPage() {
     setForm(emptyForm);
     setStackInput("");
     setEditingId(null);
+    setImageMessage("");
   };
 
   const onChangeForm = (
@@ -59,6 +62,43 @@ export default function AdminPage() {
       imageUrl: project.imageUrl,
     });
     setStackInput(project.stack.join(", "));
+    setImageMessage("Imagen cargada desde proyecto actual.");
+  };
+
+  const onUploadImage = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+
+    if (!file) {
+      return;
+    }
+
+    setUploadingImage(true);
+    setImageMessage("");
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    const response = await fetch("/api/upload", {
+      method: "POST",
+      body: formData,
+    });
+
+    if (!response.ok) {
+      setImageMessage("No se pudo subir la imagen.");
+      setUploadingImage(false);
+      return;
+    }
+
+    const data = (await response.json()) as { url?: string };
+    if (!data.url) {
+      setImageMessage("Respuesta de Cloudinary sin URL.");
+      setUploadingImage(false);
+      return;
+    }
+
+    setForm((prev) => ({ ...prev, imageUrl: data.url }));
+    setImageMessage("Imagen subida a Cloudinary y lista.");
+    setUploadingImage(false);
   };
 
   const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -210,6 +250,15 @@ export default function AdminPage() {
               URL imagen (Cloudinary)
             </label>
             <input
+              type="file"
+              accept="image/*"
+              onChange={onUploadImage}
+              className="mb-2 w-full rounded-lg border border-white/20 bg-white/5 px-3 py-2 text-sm"
+            />
+            <p className="mb-2 text-xs text-foreground-soft">
+              {uploadingImage ? "Subiendo imagen..." : imageMessage || "Sube una imagen para llenar automáticamente la URL."}
+            </p>
+            <input
               id="imageUrl"
               name="imageUrl"
               value={form.imageUrl}
@@ -218,6 +267,16 @@ export default function AdminPage() {
               className="w-full rounded-lg border border-white/20 bg-white/5 px-3 py-2 outline-none focus:border-indigo-300"
               placeholder="https://res.cloudinary.com/..."
             />
+            {form.imageUrl ? (
+              <div className="mt-3">
+                <p className="mb-1 text-xs text-foreground-soft">Vista previa</p>
+                <img
+                  src={form.imageUrl}
+                  alt="Preview"
+                  className="h-40 w-full max-w-sm rounded-lg border border-white/10 object-cover"
+                />
+              </div>
+            ) : null}
           </div>
           <div className="mt-2 flex gap-3">
             <button
