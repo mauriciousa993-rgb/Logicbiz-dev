@@ -1,4 +1,4 @@
-const menu = ["Inicio", "Servicios", "Proyectos", "Contacto", "Admin"];
+const menu = ["Inicio", "Servicios", "Proyectos", "Contacto"];
 
 export function Navbar() {
   return (
@@ -8,21 +8,12 @@ export function Navbar() {
         <ul className="hidden items-center gap-6 md:flex">
           {menu.map((item) => (
             <li key={item}>
-              {item === "Admin" ? (
-                <a
-                  href="/admin"
-                  className="text-sm font-medium text-foreground-soft transition hover:text-white"
-                >
-                  {item}
-                </a>
-              ) : (
-                <a
-                  href={`#${item.toLowerCase()}`}
-                  className="text-sm font-medium text-foreground-soft transition hover:text-white"
-                >
-                  {item}
-                </a>
-              )}
+              <a
+                href={`#${item.toLowerCase()}`}
+                className="text-sm font-medium text-foreground-soft transition hover:text-white"
+              >
+                {item}
+              </a>
             </li>
           ))}
         </ul>
