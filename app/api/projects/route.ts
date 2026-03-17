@@ -25,6 +25,15 @@ let volatileProjects: ProjectItem[] = [...initialProjectItems];
 let filePersistenceDisabled = false;
 let lastStorageMode: StorageMode = "memory";
 
+const noStoreHeaders = {
+  "Cache-Control": "no-store, max-age=0",
+} as const;
+
+function isReadOnlyFsError(error: unknown) {
+  const code = (error as NodeJS.ErrnoException | undefined)?.code;
+  return code === "EROFS" || code === "EPERM" || code === "EACCES";
+}
+
 async function upstashCommand(command: unknown[]) {
   if (!upstashUrl || !upstashToken) return null;
 
@@ -123,10 +132,12 @@ async function loadProjects(): Promise<ProjectItem[]> {
       "utf8"
     );
     lastStorageMode = storagePath.startsWith("/tmp") ? "tmp" : "file";
-  } catch {
-    // Running on read-only FS (e.g. serverless). Fall back to in-memory.
-    filePersistenceDisabled = true;
-    lastStorageMode = "memory";
+  } catch (error) {
+    // If FS is read-only, fall back to in-memory. Otherwise keep trying in future requests.
+    if (isReadOnlyFsError(error)) {
+      filePersistenceDisabled = true;
+      lastStorageMode = "memory";
+    }
   }
 
   return volatileProjects;
@@ -161,9 +172,11 @@ async function saveProjects(nextProjects: ProjectItem[]) {
       "utf8"
     );
     lastStorageMode = storagePath.startsWith("/tmp") ? "tmp" : "file";
-  } catch {
-    filePersistenceDisabled = true;
-    lastStorageMode = "memory";
+  } catch (error) {
+    if (isReadOnlyFsError(error)) {
+      filePersistenceDisabled = true;
+      lastStorageMode = "memory";
+    }
   }
 }
 
@@ -221,7 +234,12 @@ export async function GET() {
   const projects = await loadProjects();
   return NextResponse.json(
     { projects, meta: { storage: lastStorageMode } },
-    { headers: { "X-Projects-Storage": lastStorageMode } }
+    {
+      headers: {
+        ...noStoreHeaders,
+        "X-Projects-Storage": lastStorageMode,
+      },
+    }
   );
 }
 
@@ -246,7 +264,13 @@ export async function POST(request: Request) {
   await saveProjects(nextProjects);
   return NextResponse.json(
     { project: newProject, meta: { storage: lastStorageMode } },
-    { status: 201, headers: { "X-Projects-Storage": lastStorageMode } }
+    {
+      status: 201,
+      headers: {
+        ...noStoreHeaders,
+        "X-Projects-Storage": lastStorageMode,
+      },
+    }
   );
 }
 
@@ -279,7 +303,12 @@ export async function PUT(request: Request) {
   await saveProjects(nextProjects);
   return NextResponse.json(
     { project: updated, meta: { storage: lastStorageMode } },
-    { headers: { "X-Projects-Storage": lastStorageMode } }
+    {
+      headers: {
+        ...noStoreHeaders,
+        "X-Projects-Storage": lastStorageMode,
+      },
+    }
   );
 }
 
@@ -305,6 +334,11 @@ export async function DELETE(request: Request) {
   await saveProjects(nextProjects);
   return NextResponse.json(
     { ok: true, meta: { storage: lastStorageMode } },
-    { headers: { "X-Projects-Storage": lastStorageMode } }
+    {
+      headers: {
+        ...noStoreHeaders,
+        "X-Projects-Storage": lastStorageMode,
+      },
+    }
   );
 }
