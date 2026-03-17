@@ -1,9 +1,87 @@
 import { NextResponse } from "next/server";
 import { initialProjectItems, type ProjectItem } from "@/app/data/projects";
+import path from "node:path";
+import { promises as fs } from "node:fs";
 
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
-let projects: ProjectItem[] = [...initialProjectItems];
+const storagePath = process.env.PROJECTS_JSON_PATH
+  ? path.resolve(process.cwd(), process.env.PROJECTS_JSON_PATH)
+  : path.join(process.cwd(), ".data", "projects.json");
+
+let volatileProjects: ProjectItem[] = [...initialProjectItems];
+let persistenceDisabled = false;
+
+async function ensureStorageDir() {
+  await fs.mkdir(path.dirname(storagePath), { recursive: true });
+}
+
+function coerceProjects(data: unknown): ProjectItem[] | null {
+  if (Array.isArray(data)) {
+    return data as ProjectItem[];
+  }
+
+  if (data && typeof data === "object") {
+    const record = data as Record<string, unknown>;
+    if (Array.isArray(record.projects)) {
+      return record.projects as ProjectItem[];
+    }
+  }
+
+  return null;
+}
+
+async function loadProjects(): Promise<ProjectItem[]> {
+  if (persistenceDisabled) return volatileProjects;
+
+  try {
+    const raw = await fs.readFile(storagePath, "utf8");
+    const parsed = JSON.parse(raw) as unknown;
+    const stored = coerceProjects(parsed);
+
+    if (stored) {
+      volatileProjects = stored;
+      return stored;
+    }
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException | undefined)?.code;
+    if (code !== "ENOENT") {
+      // If anything unexpected happens reading/parsing, keep volatile copy.
+      return volatileProjects;
+    }
+  }
+
+  try {
+    await ensureStorageDir();
+    await fs.writeFile(
+      storagePath,
+      JSON.stringify({ projects: volatileProjects }, null, 2),
+      "utf8"
+    );
+  } catch {
+    // Running on read-only FS (e.g. serverless). Fall back to in-memory.
+    persistenceDisabled = true;
+  }
+
+  return volatileProjects;
+}
+
+async function saveProjects(nextProjects: ProjectItem[]) {
+  volatileProjects = nextProjects;
+  if (persistenceDisabled) return;
+
+  try {
+    await ensureStorageDir();
+    await fs.writeFile(
+      storagePath,
+      JSON.stringify({ projects: nextProjects }, null, 2),
+      "utf8"
+    );
+  } catch {
+    persistenceDisabled = true;
+  }
+}
 
 function normalizeStack(stack: unknown): string[] {
   if (!Array.isArray(stack)) {
@@ -56,10 +134,12 @@ function makeProjectId() {
 }
 
 export async function GET() {
+  const projects = await loadProjects();
   return NextResponse.json({ projects });
 }
 
 export async function POST(request: Request) {
+  const projects = await loadProjects();
   const body = await request.json().catch(() => null);
   const payload = parseProjectPayload(body);
 
@@ -75,11 +155,13 @@ export async function POST(request: Request) {
     ...payload,
   };
 
-  projects = [newProject, ...projects];
+  const nextProjects = [newProject, ...projects];
+  await saveProjects(nextProjects);
   return NextResponse.json({ project: newProject }, { status: 201 });
 }
 
 export async function PUT(request: Request) {
+  const projects = await loadProjects();
   const body = await request.json().catch(() => null);
   const payload = parseProjectPayload(body);
 
@@ -102,11 +184,14 @@ export async function PUT(request: Request) {
     ...payload,
   };
 
-  projects[projectIndex] = updated;
+  const nextProjects = [...projects];
+  nextProjects[projectIndex] = updated;
+  await saveProjects(nextProjects);
   return NextResponse.json({ project: updated });
 }
 
 export async function DELETE(request: Request) {
+  const projects = await loadProjects();
   const { searchParams } = new URL(request.url);
   const id = searchParams.get("id");
 
@@ -118,11 +203,12 @@ export async function DELETE(request: Request) {
   }
 
   const prevLength = projects.length;
-  projects = projects.filter((project) => project.id !== id);
+  const nextProjects = projects.filter((project) => project.id !== id);
 
-  if (projects.length === prevLength) {
+  if (nextProjects.length === prevLength) {
     return NextResponse.json({ error: "Proyecto no encontrado." }, { status: 404 });
   }
 
+  await saveProjects(nextProjects);
   return NextResponse.json({ ok: true });
 }
