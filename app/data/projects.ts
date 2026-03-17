@@ -1,4 +1,5 @@
 export interface ProjectItem {
+  id: string;
   title: string;
   description: string;
   businessFocus: string;
@@ -8,8 +9,9 @@ export interface ProjectItem {
   imageUrl: string;
 }
 
-export const projectItems: ProjectItem[] = [
+export const initialProjectItems: ProjectItem[] = [
   {
+    id: "flotas-22",
     title: "App de Gestión de Flotas (22 vehículos)",
     description:
       "Panel de control para operaciones de parque automotor con estado de cada unidad, alertas y trazabilidad de mantenimiento.",
@@ -22,6 +24,7 @@ export const projectItems: ProjectItem[] = [
       "https://res.cloudinary.com/demo/image/upload/w_1600,h_900,c_fill,q_auto,f_auto/v1730000000/sample.jpg",
   },
   {
+    id: "ensaladas-app",
     title: "App de Pedidos para Negocio de Ensaladas",
     description:
       "Experiencia de compra móvil y dashboard de pedidos, con estados de preparación y seguimiento de clientes.",
