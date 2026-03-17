@@ -1,7 +1,11 @@
+"use client";
+
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
+
+const whatsappNumber = "573001112223";
 
 const schema = z.object({
   name: z.string().min(3, "El nombre debe tener al menos 3 letras"),
@@ -26,8 +30,12 @@ export function ContactSection() {
     mode: "onBlur",
   });
 
-  const onSubmit = async (_values: ContactValues) => {
-    await new Promise((r) => setTimeout(r, 700));
+  const onSubmit = async (values: ContactValues) => {
+    const message = `Hola, quiero que me ayudes con un proyecto.\n\nNombre: ${values.name}\nEmail: ${values.email}\nMensaje: ${values.message}`;
+    const whatsappUrl = `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(
+      message
+    )}`;
+    window.open(whatsappUrl, "_blank");
     setIsSent(true);
     reset();
   };
