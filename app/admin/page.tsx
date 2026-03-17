@@ -90,13 +90,15 @@ export default function AdminPage() {
     }
 
     const data = (await response.json()) as { url?: string };
-    if (!data.url) {
+    const uploadedUrl = data.url ?? "";
+
+    if (!uploadedUrl) {
       setImageMessage("Respuesta de Cloudinary sin URL.");
       setUploadingImage(false);
       return;
     }
 
-    setForm((prev) => ({ ...prev, imageUrl: data.url }));
+    setForm((prev) => ({ ...prev, imageUrl: uploadedUrl }));
     setImageMessage("Imagen subida a Cloudinary y lista.");
     setUploadingImage(false);
   };
