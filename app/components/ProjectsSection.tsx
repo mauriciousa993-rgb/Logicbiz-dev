@@ -9,14 +9,27 @@ type ApiResponse = { projects: ProjectItem[] };
 export function ProjectsSection() {
   const [projects, setProjects] = useState<ProjectItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState("");
 
   useEffect(() => {
     const load = async () => {
       setIsLoading(true);
-      const response = await fetch("/api/projects", { cache: "no-store" });
-      const data = (await response.json()) as ApiResponse;
-      setProjects(data.projects || []);
-      setIsLoading(false);
+      setError("");
+      try {
+        const response = await fetch("/api/projects", { cache: "no-store" });
+        if (!response.ok) {
+          const data = (await response.json().catch(() => null)) as { error?: string } | null;
+          setError(data?.error ?? "No se pudieron cargar los proyectos.");
+          setIsLoading(false);
+          return;
+        }
+        const data = (await response.json()) as ApiResponse;
+        setProjects(data.projects || []);
+        setIsLoading(false);
+      } catch {
+        setError("No se pudieron cargar los proyectos.");
+        setIsLoading(false);
+      }
     };
 
     load();
@@ -33,6 +46,7 @@ export function ProjectsSection() {
         entregar soluciones claras y medibles.
       </p>
       {isLoading ? <p className="mt-6 text-sm text-foreground-soft">Cargando proyectos...</p> : null}
+      {error ? <p className="mt-6 text-sm text-rose-200">{error}</p> : null}
       {!isLoading && projects.length === 0 ? (
         <p className="mt-6 text-sm text-foreground-soft">
           Aún no hay proyectos cargados.

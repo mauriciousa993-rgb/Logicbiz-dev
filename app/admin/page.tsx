@@ -26,13 +26,29 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(true);
   const [imageMessage, setImageMessage] = useState("");
   const [storageMode, setStorageMode] = useState<StorageMode>("unknown");
+  const [projectsError, setProjectsError] = useState("");
 
   const loadProjects = useCallback(async () => {
-    const res = await fetch("/api/projects", { cache: "no-store" });
-    const data = (await res.json()) as { projects: ProjectItem[] };
-    setProjects(data.projects || []);
-    setStorageMode((res.headers.get("X-Projects-Storage") as StorageMode) ?? "unknown");
-    setLoading(false);
+    setLoading(true);
+    setProjectsError("");
+    try {
+      const res = await fetch("/api/projects", { cache: "no-store" });
+      setStorageMode((res.headers.get("X-Projects-Storage") as StorageMode) ?? "unknown");
+
+      if (!res.ok) {
+        const data = (await res.json().catch(() => null)) as { error?: string } | null;
+        setProjectsError(data?.error ?? `No se pudieron cargar proyectos (HTTP ${res.status}).`);
+        setLoading(false);
+        return;
+      }
+
+      const data = (await res.json()) as { projects: ProjectItem[] };
+      setProjects(data.projects || []);
+      setLoading(false);
+    } catch {
+      setProjectsError("No se pudieron cargar proyectos. Revisa tu conexión y el estado de Upstash.");
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -139,7 +155,8 @@ export default function AdminPage() {
       clearForm();
       loadProjects();
     } else {
-      alert("No se pudo guardar el proyecto.");
+      const data = (await response.json().catch(() => null)) as { error?: string } | null;
+      alert(data?.error ?? "No se pudo guardar el proyecto.");
     }
   };
 
@@ -153,7 +170,8 @@ export default function AdminPage() {
       setStorageMode((response.headers.get("X-Projects-Storage") as StorageMode) ?? "unknown");
       loadProjects();
     } else {
-      alert("No se pudo eliminar el proyecto.");
+      const data = (await response.json().catch(() => null)) as { error?: string } | null;
+      alert(data?.error ?? "No se pudo eliminar el proyecto.");
     }
   };
 
@@ -181,6 +199,11 @@ export default function AdminPage() {
         ) : null}
       </p>
       <div className="mt-8 rounded-3xl border border-white/10 bg-slate-900/70 p-6">
+        {projectsError ? (
+          <div className="mb-4 rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 text-sm text-rose-100">
+            {projectsError}
+          </div>
+        ) : null}
         <form onSubmit={onSubmit} className="grid gap-4">
           <div className="grid gap-4 md:grid-cols-2">
             <div>

@@ -8,9 +8,12 @@ export const runtime = "nodejs";
 
 type StorageMode = "upstash" | "file" | "tmp" | "memory";
 
-const upstashUrl = process.env.UPSTASH_REDIS_REST_URL;
-const upstashToken = process.env.UPSTASH_REDIS_REST_TOKEN;
+const upstashUrl = process.env.UPSTASH_REDIS_REST_URL ?? process.env.KV_REST_API_URL;
+const upstashToken =
+  process.env.UPSTASH_REDIS_REST_TOKEN ?? process.env.KV_REST_API_TOKEN;
 const upstashKey = process.env.UPSTASH_PROJECTS_KEY ?? "logicbiz:projects";
+const allowFallbackWhenUpstashConfigured = process.env.PROJECTS_ALLOW_FALLBACK === "1";
+const strictUpstash = Boolean(upstashUrl && upstashToken) && !allowFallbackWhenUpstashConfigured;
 
 const isServerlessLike = Boolean(process.env.VERCEL);
 const defaultStoragePath = isServerlessLike
@@ -95,8 +98,10 @@ async function loadProjects(): Promise<ProjectItem[]> {
       ]);
       lastStorageMode = "upstash";
       return volatileProjects;
-    } catch {
-      // If Upstash is configured but failing, fall back to file/memory.
+    } catch (error) {
+      lastStorageMode = "upstash";
+      if (strictUpstash) throw error;
+      // If Upstash is configured but failing, optionally fall back to file/memory.
     }
   }
 
@@ -154,8 +159,10 @@ async function saveProjects(nextProjects: ProjectItem[]) {
       ]);
       lastStorageMode = "upstash";
       return;
-    } catch {
-      // fall through to file/memory
+    } catch (error) {
+      lastStorageMode = "upstash";
+      if (strictUpstash) throw error;
+      // fall through to file/memory (if allowed)
     }
   }
 
@@ -231,7 +238,25 @@ function makeProjectId() {
 }
 
 export async function GET() {
-  const projects = await loadProjects();
+  let projects: ProjectItem[];
+  try {
+    projects = await loadProjects();
+  } catch {
+    return NextResponse.json(
+      {
+        error:
+          "No se pudo leer proyectos desde Upstash. Revisa env vars (UPSTASH_REDIS_REST_URL/TOKEN o KV_REST_API_URL/TOKEN) y el estado del servicio.",
+        meta: { storage: "upstash" satisfies StorageMode },
+      },
+      {
+        status: 502,
+        headers: {
+          ...noStoreHeaders,
+          "X-Projects-Storage": "upstash",
+        },
+      }
+    );
+  }
   return NextResponse.json(
     { projects, meta: { storage: lastStorageMode } },
     {
@@ -244,7 +269,25 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const projects = await loadProjects();
+  let projects: ProjectItem[];
+  try {
+    projects = await loadProjects();
+  } catch {
+    return NextResponse.json(
+      {
+        error:
+          "No se pudo conectar a Upstash para crear el proyecto. Intenta de nuevo en unos segundos.",
+        meta: { storage: "upstash" satisfies StorageMode },
+      },
+      {
+        status: 502,
+        headers: {
+          ...noStoreHeaders,
+          "X-Projects-Storage": "upstash",
+        },
+      }
+    );
+  }
   const body = await request.json().catch(() => null);
   const payload = parseProjectPayload(body);
 
@@ -261,7 +304,24 @@ export async function POST(request: Request) {
   };
 
   const nextProjects = [newProject, ...projects];
-  await saveProjects(nextProjects);
+  try {
+    await saveProjects(nextProjects);
+  } catch {
+    return NextResponse.json(
+      {
+        error:
+          "No se pudo persistir el proyecto en Upstash. Intenta de nuevo en unos segundos.",
+        meta: { storage: "upstash" satisfies StorageMode },
+      },
+      {
+        status: 502,
+        headers: {
+          ...noStoreHeaders,
+          "X-Projects-Storage": "upstash",
+        },
+      }
+    );
+  }
   return NextResponse.json(
     { project: newProject, meta: { storage: lastStorageMode } },
     {
@@ -275,7 +335,25 @@ export async function POST(request: Request) {
 }
 
 export async function PUT(request: Request) {
-  const projects = await loadProjects();
+  let projects: ProjectItem[];
+  try {
+    projects = await loadProjects();
+  } catch {
+    return NextResponse.json(
+      {
+        error:
+          "No se pudo conectar a Upstash para actualizar el proyecto. Intenta de nuevo en unos segundos.",
+        meta: { storage: "upstash" satisfies StorageMode },
+      },
+      {
+        status: 502,
+        headers: {
+          ...noStoreHeaders,
+          "X-Projects-Storage": "upstash",
+        },
+      }
+    );
+  }
   const body = await request.json().catch(() => null);
   const payload = parseProjectPayload(body);
 
@@ -300,7 +378,24 @@ export async function PUT(request: Request) {
 
   const nextProjects = [...projects];
   nextProjects[projectIndex] = updated;
-  await saveProjects(nextProjects);
+  try {
+    await saveProjects(nextProjects);
+  } catch {
+    return NextResponse.json(
+      {
+        error:
+          "No se pudo persistir el proyecto en Upstash. Intenta de nuevo en unos segundos.",
+        meta: { storage: "upstash" satisfies StorageMode },
+      },
+      {
+        status: 502,
+        headers: {
+          ...noStoreHeaders,
+          "X-Projects-Storage": "upstash",
+        },
+      }
+    );
+  }
   return NextResponse.json(
     { project: updated, meta: { storage: lastStorageMode } },
     {
@@ -313,7 +408,25 @@ export async function PUT(request: Request) {
 }
 
 export async function DELETE(request: Request) {
-  const projects = await loadProjects();
+  let projects: ProjectItem[];
+  try {
+    projects = await loadProjects();
+  } catch {
+    return NextResponse.json(
+      {
+        error:
+          "No se pudo conectar a Upstash para eliminar el proyecto. Intenta de nuevo en unos segundos.",
+        meta: { storage: "upstash" satisfies StorageMode },
+      },
+      {
+        status: 502,
+        headers: {
+          ...noStoreHeaders,
+          "X-Projects-Storage": "upstash",
+        },
+      }
+    );
+  }
   const { searchParams } = new URL(request.url);
   const id = searchParams.get("id");
 
@@ -331,7 +444,24 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ error: "Proyecto no encontrado." }, { status: 404 });
   }
 
-  await saveProjects(nextProjects);
+  try {
+    await saveProjects(nextProjects);
+  } catch {
+    return NextResponse.json(
+      {
+        error:
+          "No se pudo persistir el borrado en Upstash. Intenta de nuevo en unos segundos.",
+        meta: { storage: "upstash" satisfies StorageMode },
+      },
+      {
+        status: 502,
+        headers: {
+          ...noStoreHeaders,
+          "X-Projects-Storage": "upstash",
+        },
+      }
+    );
+  }
   return NextResponse.json(
     { ok: true, meta: { storage: lastStorageMode } },
     {

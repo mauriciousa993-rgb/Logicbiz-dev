@@ -36,9 +36,12 @@ La lista de proyectos se sirve desde `GET /api/projects` y el panel admin usa `P
 El API intenta persistir en este orden:
 
 1. **Upstash Redis REST** (recomendado para producción): `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN` (+ `UPSTASH_PROJECTS_KEY` opcional).
+   - Si usas **Vercel KV**, también funciona con `KV_REST_API_URL` + `KV_REST_API_TOKEN`.
 2. **Archivo JSON**: `PROJECTS_JSON_PATH` (opcional). Si no se define:
    - Local/dev: `.data/projects.json`
    - En Vercel (sin Upstash): `/tmp/logicbiz-projects.json` (mejor esfuerzo; no garantiza persistencia entre despliegues/cold starts).
+
+Si Upstash/KV está configurado, el API por defecto **no hace fallback silencioso** a archivo/memoria (para evitar “desapariciones” intermitentes). Para permitir fallback, define `PROJECTS_ALLOW_FALLBACK=1`.
 
 Para depurar el modo en uso, `GET /api/projects` devuelve el header `X-Projects-Storage` (`upstash`, `file`, `tmp` o `memory`) y el panel admin lo muestra arriba.
 
