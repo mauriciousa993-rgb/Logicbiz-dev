@@ -11,6 +11,10 @@ import {
   ShieldCheck,
   Signal,
   Workflow,
+  Lock,
+  Rocket,
+  Bug,
+  Search,
 } from "lucide-react";
 
 const core = [
@@ -40,6 +44,19 @@ const quality = [
   { name: "Jest", icon: Box, level: "Pruebas de calidad" },
   { name: "Playwright", icon: ShieldCheck, level: "QA para flujos críticos" },
   { name: "Postman", icon: CloudUpload, level: "Validación de APIs" },
+  { name: "Sentry", icon: Bug, level: "Detección y resolución de errores" },
+];
+
+const architecture = [
+  { name: "Redis", icon: ServerCog, level: "Cache y colas livianas" },
+  { name: "REST + Webhooks", icon: Workflow, level: "Integración de servicios externos" },
+  { name: "Docker", icon: Rocket, level: "Entornos reproducibles" },
+];
+
+const security = [
+  { name: "OAuth / JWT", icon: Lock, level: "Autenticación para clientes reales" },
+  { name: "RLS + ACL", icon: ShieldCheck, level: "Control de accesos y permisos" },
+  { name: "SEO técnico", icon: Search, level: "Indexación y visibilidad orgánica" },
 ];
 
 function StackPanel({
@@ -95,6 +112,8 @@ export function TechStack() {
           <StackPanel title="Backend" items={backend} />
           <StackPanel title="DevOps" items={devops} />
           <StackPanel title="Calidad" items={quality} />
+          <StackPanel title="Arquitectura" items={architecture} />
+          <StackPanel title="Seguridad" items={security} />
         </div>
       </div>
     </section>
