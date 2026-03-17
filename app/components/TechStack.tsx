@@ -16,6 +16,7 @@ import {
   Bug,
   Search,
 } from "lucide-react";
+import { type ComponentType } from "react";
 
 const core = [
   { name: "Next.js", icon: Globe, level: "Frontend/Full Stack" },
@@ -66,7 +67,7 @@ function StackPanel({
   title: string;
   items: {
     name: string;
-    icon: (props: { size: number; className?: string }) => JSX.Element;
+    icon: ComponentType<{ size: number; className?: string }>;
     level: string;
   }[];
 }) {
