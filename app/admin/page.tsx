@@ -5,6 +5,7 @@ import Link from "next/link";
 import type { ProjectItem } from "../data/projects";
 
 type ProjectFormState = Omit<ProjectItem, "id">;
+type StorageMode = "upstash" | "file" | "tmp" | "memory" | "unknown";
 
 const emptyForm: ProjectFormState = {
   title: "",
@@ -24,11 +25,13 @@ export default function AdminPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [imageMessage, setImageMessage] = useState("");
+  const [storageMode, setStorageMode] = useState<StorageMode>("unknown");
 
   const loadProjects = useCallback(async () => {
     const res = await fetch("/api/projects", { cache: "no-store" });
     const data = (await res.json()) as { projects: ProjectItem[] };
     setProjects(data.projects || []);
+    setStorageMode((res.headers.get("X-Projects-Storage") as StorageMode) ?? "unknown");
     setLoading(false);
   }, []);
 
@@ -132,6 +135,7 @@ export default function AdminPage() {
     });
 
     if (response.ok) {
+      setStorageMode((response.headers.get("X-Projects-Storage") as StorageMode) ?? "unknown");
       clearForm();
       loadProjects();
     } else {
@@ -146,6 +150,7 @@ export default function AdminPage() {
     });
 
     if (response.ok) {
+      setStorageMode((response.headers.get("X-Projects-Storage") as StorageMode) ?? "unknown");
       loadProjects();
     } else {
       alert("No se pudo eliminar el proyecto.");
@@ -162,6 +167,18 @@ export default function AdminPage() {
       <h1 className="text-4xl font-semibold">Panel de administración</h1>
       <p className="mt-2 text-sm text-foreground-soft">
         Gestiona aquí la sección de proyectos del portafolio.
+      </p>
+      <p className="mt-2 text-xs text-foreground-soft">
+        Almacenamiento:{" "}
+        <span className="font-semibold text-indigo-200">
+          {storageMode === "unknown" ? "verificando..." : storageMode}
+        </span>
+        {storageMode === "memory" ? (
+          <span className="ml-2 text-rose-200">
+            (no persistente). Configura `UPSTASH_REDIS_REST_URL`/`UPSTASH_REDIS_REST_TOKEN` o define
+            `PROJECTS_JSON_PATH` a una ruta escribible.
+          </span>
+        ) : null}
       </p>
       <div className="mt-8 rounded-3xl border border-white/10 bg-slate-900/70 p-6">
         <form onSubmit={onSubmit} className="grid gap-4">

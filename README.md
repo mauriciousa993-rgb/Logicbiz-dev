@@ -29,6 +29,21 @@ To learn more about Next.js, take a look at the following resources:
 
 You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
 
+## Proyectos (persistencia)
+
+La lista de proyectos se sirve desde `GET /api/projects` y el panel admin usa `POST/PUT/DELETE /api/projects`.
+
+El API intenta persistir en este orden:
+
+1. **Upstash Redis REST** (recomendado para producción): `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN` (+ `UPSTASH_PROJECTS_KEY` opcional).
+2. **Archivo JSON**: `PROJECTS_JSON_PATH` (opcional). Si no se define:
+   - Local/dev: `.data/projects.json`
+   - En Vercel (sin Upstash): `/tmp/logicbiz-projects.json` (mejor esfuerzo; no garantiza persistencia entre despliegues/cold starts).
+
+Para depurar el modo en uso, `GET /api/projects` devuelve el header `X-Projects-Storage` (`upstash`, `file`, `tmp` o `memory`) y el panel admin lo muestra arriba.
+
+Smoke check rápido: `scripts/smoke-projects-api.sh`.
+
 ## Deploy on Vercel
 
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.

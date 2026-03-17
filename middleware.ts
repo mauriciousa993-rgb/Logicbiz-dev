@@ -33,7 +33,12 @@ function isAdminAuthorized(request: NextRequest) {
 }
 
 export function middleware(request: NextRequest) {
-  if (request.nextUrl.pathname.startsWith("/admin")) {
+  const pathname = request.nextUrl.pathname;
+  const needsAuthForAdmin = pathname.startsWith("/admin");
+  const needsAuthForProjectsMutation =
+    pathname.startsWith("/api/projects") && request.method !== "GET";
+
+  if (needsAuthForAdmin || needsAuthForProjectsMutation) {
     if (!isAdminAuthorized(request)) {
       return unauthorized();
     }
@@ -43,5 +48,5 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/admin/:path*"],
+  matcher: ["/admin/:path*", "/api/projects"],
 };

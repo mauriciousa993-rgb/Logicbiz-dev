@@ -6,16 +6,24 @@ import { promises as fs } from "node:fs";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
+type StorageMode = "upstash" | "file" | "tmp" | "memory";
+
 const upstashUrl = process.env.UPSTASH_REDIS_REST_URL;
 const upstashToken = process.env.UPSTASH_REDIS_REST_TOKEN;
 const upstashKey = process.env.UPSTASH_PROJECTS_KEY ?? "logicbiz:projects";
 
+const isServerlessLike = Boolean(process.env.VERCEL);
+const defaultStoragePath = isServerlessLike
+  ? path.join("/tmp", "logicbiz-projects.json")
+  : path.join(process.cwd(), ".data", "projects.json");
+
 const storagePath = process.env.PROJECTS_JSON_PATH
   ? path.resolve(process.cwd(), process.env.PROJECTS_JSON_PATH)
-  : path.join(process.cwd(), ".data", "projects.json");
+  : defaultStoragePath;
 
 let volatileProjects: ProjectItem[] = [...initialProjectItems];
 let filePersistenceDisabled = false;
+let lastStorageMode: StorageMode = "memory";
 
 async function upstashCommand(command: unknown[]) {
   if (!upstashUrl || !upstashToken) return null;
@@ -66,6 +74,7 @@ async function loadProjects(): Promise<ProjectItem[]> {
         const stored = coerceProjects(parsed);
         if (stored) {
           volatileProjects = stored;
+          lastStorageMode = "upstash";
           return stored;
         }
       }
@@ -75,13 +84,17 @@ async function loadProjects(): Promise<ProjectItem[]> {
         upstashKey,
         JSON.stringify({ projects: volatileProjects }),
       ]);
+      lastStorageMode = "upstash";
       return volatileProjects;
     } catch {
       // If Upstash is configured but failing, fall back to file/memory.
     }
   }
 
-  if (filePersistenceDisabled) return volatileProjects;
+  if (filePersistenceDisabled) {
+    lastStorageMode = "memory";
+    return volatileProjects;
+  }
 
   try {
     const raw = await fs.readFile(storagePath, "utf8");
@@ -90,12 +103,14 @@ async function loadProjects(): Promise<ProjectItem[]> {
 
     if (stored) {
       volatileProjects = stored;
+      lastStorageMode = storagePath.startsWith("/tmp") ? "tmp" : "file";
       return stored;
     }
   } catch (error) {
     const code = (error as NodeJS.ErrnoException | undefined)?.code;
     if (code !== "ENOENT") {
       // If anything unexpected happens reading/parsing, keep volatile copy.
+      lastStorageMode = "memory";
       return volatileProjects;
     }
   }
@@ -107,9 +122,11 @@ async function loadProjects(): Promise<ProjectItem[]> {
       JSON.stringify({ projects: volatileProjects }, null, 2),
       "utf8"
     );
+    lastStorageMode = storagePath.startsWith("/tmp") ? "tmp" : "file";
   } catch {
     // Running on read-only FS (e.g. serverless). Fall back to in-memory.
     filePersistenceDisabled = true;
+    lastStorageMode = "memory";
   }
 
   return volatileProjects;
@@ -124,13 +141,17 @@ async function saveProjects(nextProjects: ProjectItem[]) {
         upstashKey,
         JSON.stringify({ projects: nextProjects }),
       ]);
+      lastStorageMode = "upstash";
       return;
     } catch {
       // fall through to file/memory
     }
   }
 
-  if (filePersistenceDisabled) return;
+  if (filePersistenceDisabled) {
+    lastStorageMode = "memory";
+    return;
+  }
 
   try {
     await ensureStorageDir();
@@ -139,8 +160,10 @@ async function saveProjects(nextProjects: ProjectItem[]) {
       JSON.stringify({ projects: nextProjects }, null, 2),
       "utf8"
     );
+    lastStorageMode = storagePath.startsWith("/tmp") ? "tmp" : "file";
   } catch {
     filePersistenceDisabled = true;
+    lastStorageMode = "memory";
   }
 }
 
@@ -196,7 +219,10 @@ function makeProjectId() {
 
 export async function GET() {
   const projects = await loadProjects();
-  return NextResponse.json({ projects });
+  return NextResponse.json(
+    { projects, meta: { storage: lastStorageMode } },
+    { headers: { "X-Projects-Storage": lastStorageMode } }
+  );
 }
 
 export async function POST(request: Request) {
@@ -218,7 +244,10 @@ export async function POST(request: Request) {
 
   const nextProjects = [newProject, ...projects];
   await saveProjects(nextProjects);
-  return NextResponse.json({ project: newProject }, { status: 201 });
+  return NextResponse.json(
+    { project: newProject, meta: { storage: lastStorageMode } },
+    { status: 201, headers: { "X-Projects-Storage": lastStorageMode } }
+  );
 }
 
 export async function PUT(request: Request) {
@@ -248,7 +277,10 @@ export async function PUT(request: Request) {
   const nextProjects = [...projects];
   nextProjects[projectIndex] = updated;
   await saveProjects(nextProjects);
-  return NextResponse.json({ project: updated });
+  return NextResponse.json(
+    { project: updated, meta: { storage: lastStorageMode } },
+    { headers: { "X-Projects-Storage": lastStorageMode } }
+  );
 }
 
 export async function DELETE(request: Request) {
@@ -271,5 +303,8 @@ export async function DELETE(request: Request) {
   }
 
   await saveProjects(nextProjects);
-  return NextResponse.json({ ok: true });
+  return NextResponse.json(
+    { ok: true, meta: { storage: lastStorageMode } },
+    { headers: { "X-Projects-Storage": lastStorageMode } }
+  );
 }
