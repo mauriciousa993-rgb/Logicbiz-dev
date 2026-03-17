@@ -36,14 +36,6 @@ export function ProjectCard({ project }: ProjectCardProps) {
         </div>
         <div className="flex flex-wrap gap-3 pt-2">
           <a
-            href={project.repoUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="rounded-full border border-white/20 px-4 py-2 text-sm transition hover:border-indigo-300"
-          >
-            Ver repo
-          </a>
-          <a
             href={project.demoUrl}
             target="_blank"
             rel="noopener noreferrer"
