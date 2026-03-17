@@ -40,21 +40,41 @@ function isReadOnlyFsError(error: unknown) {
 async function upstashCommand(command: unknown[]) {
   if (!upstashUrl || !upstashToken) return null;
 
-  const response = await fetch(upstashUrl, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${upstashToken}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ command }),
-  });
+  let response: Response;
+  try {
+    response = await fetch(upstashUrl, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${upstashToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(command),
+    });
+  } catch (error) {
+    const message = (error as Error | undefined)?.message ?? String(error);
+    throw new Error(`Upstash fetch failed: ${message}`);
+  }
 
   if (!response.ok) {
-    throw new Error(`Upstash error: ${response.status}`);
+    const bodyText = await response.text().catch(() => "");
+    const snippet = bodyText.trim().slice(0, 240);
+    throw new Error(
+      `Upstash error: HTTP ${response.status}${snippet ? ` - ${snippet}` : ""}`
+    );
   }
 
   const data = (await response.json()) as { result?: unknown };
   return data.result ?? null;
+}
+
+function safeUpstashDiagnostics() {
+  if (!upstashUrl || !upstashToken) return null;
+  try {
+    const host = new URL(upstashUrl).host;
+    return { host, key: upstashKey };
+  } catch {
+    return { host: "invalid-url", key: upstashKey };
+  }
 }
 
 async function ensureStorageDir() {
@@ -241,11 +261,16 @@ export async function GET() {
   let projects: ProjectItem[];
   try {
     projects = await loadProjects();
-  } catch {
+  } catch (error) {
+    console.error("Projects Upstash/KV GET failed", {
+      error: (error as Error | undefined)?.message ?? String(error),
+      diag: safeUpstashDiagnostics(),
+    });
     return NextResponse.json(
       {
         error:
           "No se pudo leer proyectos desde Upstash. Revisa env vars (UPSTASH_REDIS_REST_URL/TOKEN o KV_REST_API_URL/TOKEN) y el estado del servicio.",
+        details: (error as Error | undefined)?.message ?? String(error),
         meta: { storage: "upstash" satisfies StorageMode },
       },
       {
@@ -272,11 +297,16 @@ export async function POST(request: Request) {
   let projects: ProjectItem[];
   try {
     projects = await loadProjects();
-  } catch {
+  } catch (error) {
+    console.error("Projects Upstash/KV POST load failed", {
+      error: (error as Error | undefined)?.message ?? String(error),
+      diag: safeUpstashDiagnostics(),
+    });
     return NextResponse.json(
       {
         error:
           "No se pudo conectar a Upstash para crear el proyecto. Intenta de nuevo en unos segundos.",
+        details: (error as Error | undefined)?.message ?? String(error),
         meta: { storage: "upstash" satisfies StorageMode },
       },
       {
@@ -306,11 +336,16 @@ export async function POST(request: Request) {
   const nextProjects = [newProject, ...projects];
   try {
     await saveProjects(nextProjects);
-  } catch {
+  } catch (error) {
+    console.error("Projects Upstash/KV POST save failed", {
+      error: (error as Error | undefined)?.message ?? String(error),
+      diag: safeUpstashDiagnostics(),
+    });
     return NextResponse.json(
       {
         error:
           "No se pudo persistir el proyecto en Upstash. Intenta de nuevo en unos segundos.",
+        details: (error as Error | undefined)?.message ?? String(error),
         meta: { storage: "upstash" satisfies StorageMode },
       },
       {
@@ -338,11 +373,16 @@ export async function PUT(request: Request) {
   let projects: ProjectItem[];
   try {
     projects = await loadProjects();
-  } catch {
+  } catch (error) {
+    console.error("Projects Upstash/KV PUT load failed", {
+      error: (error as Error | undefined)?.message ?? String(error),
+      diag: safeUpstashDiagnostics(),
+    });
     return NextResponse.json(
       {
         error:
           "No se pudo conectar a Upstash para actualizar el proyecto. Intenta de nuevo en unos segundos.",
+        details: (error as Error | undefined)?.message ?? String(error),
         meta: { storage: "upstash" satisfies StorageMode },
       },
       {
@@ -380,11 +420,16 @@ export async function PUT(request: Request) {
   nextProjects[projectIndex] = updated;
   try {
     await saveProjects(nextProjects);
-  } catch {
+  } catch (error) {
+    console.error("Projects Upstash/KV PUT save failed", {
+      error: (error as Error | undefined)?.message ?? String(error),
+      diag: safeUpstashDiagnostics(),
+    });
     return NextResponse.json(
       {
         error:
           "No se pudo persistir el proyecto en Upstash. Intenta de nuevo en unos segundos.",
+        details: (error as Error | undefined)?.message ?? String(error),
         meta: { storage: "upstash" satisfies StorageMode },
       },
       {
@@ -411,11 +456,16 @@ export async function DELETE(request: Request) {
   let projects: ProjectItem[];
   try {
     projects = await loadProjects();
-  } catch {
+  } catch (error) {
+    console.error("Projects Upstash/KV DELETE load failed", {
+      error: (error as Error | undefined)?.message ?? String(error),
+      diag: safeUpstashDiagnostics(),
+    });
     return NextResponse.json(
       {
         error:
           "No se pudo conectar a Upstash para eliminar el proyecto. Intenta de nuevo en unos segundos.",
+        details: (error as Error | undefined)?.message ?? String(error),
         meta: { storage: "upstash" satisfies StorageMode },
       },
       {
@@ -446,11 +496,16 @@ export async function DELETE(request: Request) {
 
   try {
     await saveProjects(nextProjects);
-  } catch {
+  } catch (error) {
+    console.error("Projects Upstash/KV DELETE save failed", {
+      error: (error as Error | undefined)?.message ?? String(error),
+      diag: safeUpstashDiagnostics(),
+    });
     return NextResponse.json(
       {
         error:
           "No se pudo persistir el borrado en Upstash. Intenta de nuevo en unos segundos.",
+        details: (error as Error | undefined)?.message ?? String(error),
         meta: { storage: "upstash" satisfies StorageMode },
       },
       {
