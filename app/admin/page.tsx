@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type ChangeEvent, type FormEvent } from "react";
+import { useCallback, useEffect, useState, type ChangeEvent, type FormEvent } from "react";
 import Link from "next/link";
 import type { ProjectItem } from "../data/projects";
 
@@ -25,16 +25,23 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(true);
   const [imageMessage, setImageMessage] = useState("");
 
-  const loadProjects = async () => {
+  const loadProjects = useCallback(async () => {
     const res = await fetch("/api/projects", { cache: "no-store" });
     const data = (await res.json()) as { projects: ProjectItem[] };
     setProjects(data.projects || []);
     setLoading(false);
-  };
+  }, []);
 
   useEffect(() => {
     loadProjects();
-  }, []);
+    const refresh = () => loadProjects();
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", refresh);
+    };
+  }, [loadProjects]);
 
   const clearForm = () => {
     setForm(emptyForm);

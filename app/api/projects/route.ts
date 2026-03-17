@@ -6,12 +6,36 @@ import { promises as fs } from "node:fs";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
+const upstashUrl = process.env.UPSTASH_REDIS_REST_URL;
+const upstashToken = process.env.UPSTASH_REDIS_REST_TOKEN;
+const upstashKey = process.env.UPSTASH_PROJECTS_KEY ?? "logicbiz:projects";
+
 const storagePath = process.env.PROJECTS_JSON_PATH
   ? path.resolve(process.cwd(), process.env.PROJECTS_JSON_PATH)
   : path.join(process.cwd(), ".data", "projects.json");
 
 let volatileProjects: ProjectItem[] = [...initialProjectItems];
-let persistenceDisabled = false;
+let filePersistenceDisabled = false;
+
+async function upstashCommand(command: unknown[]) {
+  if (!upstashUrl || !upstashToken) return null;
+
+  const response = await fetch(upstashUrl, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${upstashToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ command }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Upstash error: ${response.status}`);
+  }
+
+  const data = (await response.json()) as { result?: unknown };
+  return data.result ?? null;
+}
 
 async function ensureStorageDir() {
   await fs.mkdir(path.dirname(storagePath), { recursive: true });
@@ -33,7 +57,31 @@ function coerceProjects(data: unknown): ProjectItem[] | null {
 }
 
 async function loadProjects(): Promise<ProjectItem[]> {
-  if (persistenceDisabled) return volatileProjects;
+  if (upstashUrl && upstashToken) {
+    try {
+      const storedRaw = await upstashCommand(["GET", upstashKey]);
+
+      if (typeof storedRaw === "string" && storedRaw.trim().length > 0) {
+        const parsed = JSON.parse(storedRaw) as unknown;
+        const stored = coerceProjects(parsed);
+        if (stored) {
+          volatileProjects = stored;
+          return stored;
+        }
+      }
+
+      await upstashCommand([
+        "SET",
+        upstashKey,
+        JSON.stringify({ projects: volatileProjects }),
+      ]);
+      return volatileProjects;
+    } catch {
+      // If Upstash is configured but failing, fall back to file/memory.
+    }
+  }
+
+  if (filePersistenceDisabled) return volatileProjects;
 
   try {
     const raw = await fs.readFile(storagePath, "utf8");
@@ -61,7 +109,7 @@ async function loadProjects(): Promise<ProjectItem[]> {
     );
   } catch {
     // Running on read-only FS (e.g. serverless). Fall back to in-memory.
-    persistenceDisabled = true;
+    filePersistenceDisabled = true;
   }
 
   return volatileProjects;
@@ -69,7 +117,20 @@ async function loadProjects(): Promise<ProjectItem[]> {
 
 async function saveProjects(nextProjects: ProjectItem[]) {
   volatileProjects = nextProjects;
-  if (persistenceDisabled) return;
+  if (upstashUrl && upstashToken) {
+    try {
+      await upstashCommand([
+        "SET",
+        upstashKey,
+        JSON.stringify({ projects: nextProjects }),
+      ]);
+      return;
+    } catch {
+      // fall through to file/memory
+    }
+  }
+
+  if (filePersistenceDisabled) return;
 
   try {
     await ensureStorageDir();
@@ -79,7 +140,7 @@ async function saveProjects(nextProjects: ProjectItem[]) {
       "utf8"
     );
   } catch {
-    persistenceDisabled = true;
+    filePersistenceDisabled = true;
   }
 }
 
