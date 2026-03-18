@@ -15,15 +15,15 @@ const dmSans = DM_Sans({
 export const metadata: Metadata = {
   metadataBase: new URL("http://localhost:3000"),
   title: {
-    default: "LogicBiz Dev | Desarrollo web orientado a negocio",
+    default: "LogicBiz Dev | Ingenieria de software y desarrollo web",
     template: "%s | LogicBiz Dev",
   },
   description:
-    "Portafolio de LogicBiz Dev. Desarrollo aplicaciones web modernas, optimizadas para conversion y crecimiento real del negocio.",
+    "Portafolio de LogicBiz Dev. Ingeniero de software full stack: desarrollo aplicaciones web modernas, APIs y sistemas a medida con foco en rendimiento y calidad.",
   openGraph: {
-    title: "LogicBiz Dev | Desarrollo web orientado a negocio",
+    title: "LogicBiz Dev | Ingenieria de software y desarrollo web",
     description:
-      "Landing profesional para servicios de desarrollo web, proyectos reales y contacto directo.",
+      "Portafolio profesional de ingenieria de software: servicios full stack, proyectos reales y contacto directo.",
     url: "https://logicbiz.dev",
     siteName: "LogicBiz Dev",
     locale: "es_CO",
